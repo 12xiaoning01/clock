@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>动态时钟</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: radial-gradient(circle at 50% 30%, #0b1030 0%, #05060f 60%, #000 100%);
+    font-family: "Courier New", Courier, monospace;
+  }
+  #clock-box {
+    width: min(92vw, 92vh, 450px);
+    aspect-ratio: 1 / 1;
+    background: #03040d;
+    border-radius: 50%;
+    box-shadow:
+      0 0 25px rgba(0, 240, 255, .45),
+      0 0 60px rgba(255, 0, 230, .25),
+      inset 0 0 40px rgba(0, 240, 255, .12);
+  }
+  canvas { display: block; width: 100%; height: 100%; }
+</style>
+</head>
+<body>
+  <div id="clock-box">
+    <canvas id="clock" width="450" height="450"></canvas>
+  </div>
+
+<script>
+const canvas = document.getElementById('clock');
+const ctx = canvas.getContext('2d');
+const W = 450, H = 450, CX = W / 2, CY = H / 2;
+
+// 高清屏适配
+const dpr = window.devicePixelRatio || 1;
+canvas.width = W * dpr;
+canvas.height = H * dpr;
+ctx.scale(dpr, dpr);
+canvas.style.width = '100%';
+canvas.style.height = '100%';
+
+const weekText = ['星期一','星期二','星期三','星期四','星期五','星期六','星期日'];
+
+// 画表盘：霓虹外圈 + 荧光数字 1-12 + 60 个刻度
+function drawDial() {
+  ctx.clearRect(0, 0, W, H);
+
+  // 表盘径向渐变背景
+  const bg = ctx.createRadialGradient(CX, CY, 20, CX, CY, 180);
+  bg.addColorStop(0, '#0e1a45');
+  bg.addColorStop(0.7, '#070b22');
+  bg.addColorStop(1, '#02030c');
+  ctx.fillStyle = bg;
+  ctx.beginPath();
+  ctx.arc(CX, CY, 180, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 霓虹外圈：12 段，青色与品红交替发光
+  const ringR = 172;
+  ctx.lineWidth = 6;
+  ctx.shadowBlur = 14;
+  for (let n = 1; n <= 12; n++) {
+    const startA = ((n - 1) * 30 - 90) * Math.PI / 180;
+    const endA = (n * 30 - 90) * Math.PI / 180;
+    const neon = n % 2 === 0 ? '#ff00e6' : '#00f0ff';
+    ctx.strokeStyle = neon;
+    ctx.shadowColor = neon;
+    ctx.beginPath();
+    ctx.arc(CX, CY, ringR, startA, endA);
+    ctx.stroke();
+  }
+  ctx.shadowBlur = 0;
+
+  // 60 个刻度，每 5 个为小时刻度
+  for (let i = 0; i < 60; i++) {
+    ctx.save();
+    ctx.translate(CX, CY);
+    ctx.rotate(i * 6 * Math.PI / 180); // 0 度朝上、顺时针
+    ctx.beginPath();
+    if (i % 5 === 0) {
+      ctx.strokeStyle = '#00f0ff';
+      ctx.lineWidth = 4;
+      ctx.moveTo(0, -158);
+      ctx.lineTo(0, -140);              // 小时刻度长 18
+    } else {
+      ctx.strokeStyle = 'rgba(0, 240, 255, .35)';
+      ctx.lineWidth = 1;
+      ctx.moveTo(0, -158);
+      ctx.lineTo(0, -154);              // 分钟刻度小点
+    }
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // 荧光数字 1-12，青色与品红交替
+  ctx.font = 'bold 24px "Courier New", monospace';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.shadowBlur = 10;
+  const numR = 116;
+  for (let n = 1; n <= 12; n++) {
+    const a = n * 30 * Math.PI / 180;
+    const x = CX + numR * Math.sin(a);
+    const y = CY - numR * Math.cos(a);
+    const neon = n % 2 === 0 ? '#ff4df0' : '#39f6ff';
+    ctx.fillStyle = neon;
+    ctx.shadowColor = neon;
+    ctx.fillText(n, x, y);
+  }
+  ctx.shadowBlur = 0;
+}
+
+// 画一根发光指针（尾部向后延伸 10%）
+function drawHand(angleDeg, length, width, color) {
+  const rad = angleDeg * Math.PI / 180;
+  ctx.save();
+  ctx.translate(CX, CY);
+  ctx.rotate(rad);
+  ctx.strokeStyle = color;
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 12;
+  ctx.lineWidth = width;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(0, length * 0.1);    // 尾部
+  ctx.lineTo(0, -length);          // 头部
+  ctx.stroke();
+  ctx.restore();
+}
+
+function render() {
+  const t = new Date();
+  const second = t.getSeconds() + t.getMilliseconds() * 0.001;
+  const minute = t.getMinutes() + second / 60;
+  const hour = (t.getHours() % 12) + minute / 60;
+
+  drawDial();
+
+  // 时针青、分针品红、秒针荧光绿（长度与海龟版一致，均带霓虹发光）
+  drawHand(30 * hour, 90, 6, '#00f0ff');
+  drawHand(6 * minute, 110, 4, '#ff00e6');
+  drawHand(6 * second, 135, 2, '#39ff14');
+
+  // 中心轴盖
+  ctx.beginPath();
+  ctx.arc(CX, CY, 6, 0, Math.PI * 2);
+  ctx.fillStyle = '#39ff14';
+  ctx.shadowColor = '#39ff14';
+  ctx.shadowBlur = 14;
+  ctx.fill();
+  ctx.shadowBlur = 0;
+
+  // 星期（中心上方 65）
+  ctx.fillStyle = '#39f6ff';
+  ctx.shadowColor = '#00f0ff';
+  ctx.shadowBlur = 8;
+  ctx.font = 'bold 20px "Courier New", monospace';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(weekText[(t.getDay() + 6) % 7], CX, CY - 65);
+  // 日期（中心下方 65）
+  const y = t.getFullYear();
+  const m = String(t.getMonth() + 1).padStart(2, '0');
+  const d = String(t.getDate()).padStart(2, '0');
+  ctx.fillStyle = '#ff4df0';
+  ctx.shadowColor = '#ff00e6';
+  ctx.fillText(`${y}-${m}-${d}`, CX, CY + 65);
+  ctx.shadowBlur = 0;
+
+  requestAnimationFrame(render);
+}
+
+render();
+</script>
+</body>
+</html>
